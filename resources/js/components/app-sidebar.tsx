@@ -1,5 +1,5 @@
 import { Link } from '@inertiajs/react';
-import { BookOpen, FolderGit2, LayoutGrid } from 'lucide-react';
+import { BarChart3, BookOpen, ClipboardCheck, FlaskConical, LayoutDashboard, Users } from 'lucide-react';
 import AppLogo from '@/components/app-logo';
 import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
@@ -13,38 +13,33 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
-import { dashboard } from '@/routes';
+import { usePage } from '@inertiajs/react';
 import type { NavItem } from '@/types';
 
-const mainNavItems: NavItem[] = [
-    {
-        title: 'Dashboard',
-        href: dashboard(),
-        icon: LayoutGrid,
-    },
-];
-
-const footerNavItems: NavItem[] = [
-    {
-        title: 'Repository',
-        href: 'https://github.com/laravel/react-starter-kit',
-        icon: FolderGit2,
-    },
-    {
-        title: 'Documentation',
-        href: 'https://laravel.com/docs/starter-kits#react',
-        icon: BookOpen,
-    },
-];
-
 export function AppSidebar() {
+    const { auth } = usePage().props;
+    const isTeacher = auth.user.role === 'teacher';
+    const mainNavItems: NavItem[] = isTeacher
+        ? [
+              { title: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+              { title: 'Students', href: '/students', icon: Users },
+              { title: 'Lessons', href: '/lessons', icon: BookOpen },
+              { title: 'Submissions', href: '/submissions', icon: ClipboardCheck },
+              { title: 'Case Studies', href: '/case-studies', icon: FlaskConical },
+              { title: 'Reports', href: '/reports', icon: BarChart3 },
+          ]
+        : [
+              { title: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+              { title: 'Lessons', href: '/lessons', icon: BookOpen },
+              { title: 'Case Studies', href: '/case-studies', icon: FlaskConical },
+          ];
     return (
         <Sidebar collapsible="icon" variant="inset">
             <SidebarHeader>
                 <SidebarMenu>
                     <SidebarMenuItem>
                         <SidebarMenuButton size="lg" asChild>
-                            <Link href={dashboard()} prefetch>
+                            <Link href="/dashboard" prefetch>
                                 <AppLogo />
                             </Link>
                         </SidebarMenuButton>
@@ -57,7 +52,6 @@ export function AppSidebar() {
             </SidebarContent>
 
             <SidebarFooter>
-                <NavFooter items={footerNavItems} className="mt-auto" />
                 <NavUser />
             </SidebarFooter>
         </Sidebar>

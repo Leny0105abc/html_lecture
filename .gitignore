@@ -15,6 +15,10 @@
 .env
 .env.backup
 .env.production
+.env.*
+!.env.example
+/*.env
+/toArray())
 .phpactor.json
 .phpunit.result.cache
 Homestead.json

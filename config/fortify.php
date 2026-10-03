@@ -45,7 +45,7 @@ return [
     |
     */
 
-    'username' => 'email',
+    'username' => 'username',
 
     'email' => 'email',
 
@@ -161,7 +161,7 @@ return [
     */
 
     'features' => [
-        Features::registration(),
+        // Student accounts are created by teachers only.
         Features::resetPasswords(),
         Features::emailVerification(),
         Features::twoFactorAuthentication([
