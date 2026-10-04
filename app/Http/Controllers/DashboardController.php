@@ -75,6 +75,15 @@ class DashboardController extends Controller
             ],
             'nextLesson' => $nextLesson ? ['id' => $nextLesson->id, 'number' => $nextLesson->number, 'title' => $nextLesson->title, 'level' => $nextLesson->level] : null,
             'recentActivity' => $user->activityLogs()->latest('occurred_at')->take(5)->get(['event', 'metadata', 'occurred_at']),
+            'teacherReviews' => Submission::where('user_id', $user->id)->whereNotNull('lesson_id')
+                ->whereNotNull('reviewed_at')->with(['lesson:id,number,title', 'feedback.teacher:id,name'])
+                ->latest('reviewed_at')->take(5)->get()->map(fn ($submission) => [
+                    'id' => $submission->id, 'lesson' => $submission->lesson?->only('id', 'number', 'title'),
+                    'status' => $submission->status, 'version' => $submission->version,
+                    'reviewed_at' => $submission->reviewed_at,
+                    'comment' => $submission->feedback->last()?->comment,
+                    'teacher' => $submission->feedback->last()?->teacher?->name,
+                ]),
         ]);
     }
 }

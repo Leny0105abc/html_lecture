@@ -63,14 +63,23 @@ test('teacher approval unlocks the next lesson and shows a continue link', funct
 
     $this->actingAs($teacher)->post("/submissions/{$submission->id}/review", [
         'status' => 'completed',
+        'comment' => 'Good work',
     ])->assertRedirect();
 
     expect(StudentLessonProgress::where('user_id', $student->id)->where('lesson_id', $first->id)->first()->status)->toBe('completed');
     $this->actingAs($student)->get("/code-lab/{$first->id}")->assertInertia(fn (Assert $page) => $page
         ->component('code-lab/show')
         ->where('workspace.status', 'completed')
+        ->where('feedback.status', 'completed')
+        ->where('feedback.feedback.0.comment', 'Good work')
+        ->where('feedback.feedback.0.teacher.name', $teacher->name)
         ->where('nextLesson.id', $second->id)
         ->where('nextLesson.unlocked', true)
+        ->etc());
+    $this->get('/dashboard')->assertInertia(fn (Assert $page) => $page
+        ->where('teacherReviews.0.status', 'completed')
+        ->where('teacherReviews.0.teacher', $teacher->name)
+        ->where('teacherReviews.0.comment', 'Good work')
         ->etc());
     $this->get("/code-lab/{$second->id}")->assertOk();
 });
@@ -108,6 +117,29 @@ test('teachers can distinguish saved work from submitted work and review the sub
         ->where('submissions.data.0.id', $submission->id)
         ->etc());
     $this->get("/code-lab/{$second->id}")->assertForbidden();
+});
+
+test('student remarks refresh through partial requests and remain private', function () {
+    $teacher = User::factory()->create(['role' => 'teacher']);
+    $student = User::factory()->create();
+    $other = User::factory()->create();
+    $lesson = makeLesson(1);
+    StudentLessonProgress::create(['user_id' => $student->id, 'lesson_id' => $lesson->id, 'status' => 'submitted']);
+    $submission = Submission::create(['user_id' => $student->id, 'lesson_id' => $lesson->id, 'version' => 1, 'status' => 'submitted', 'html_code' => '<h1>Hello</h1>', 'submitted_at' => now()]);
+    $this->actingAs($student)->get('/dashboard')->assertInertia(fn (Assert $page) => $page->where('teacherReviews', [])->etc());
+    $this->actingAs($teacher)->post('/submissions/'.$submission->id.'/review', ['status' => 'needs_revision', 'comment' => 'Please add a paragraph.'])->assertRedirect();
+    $this->actingAs($student)->get('/code-lab/'.$lesson->id, [
+        'X-Inertia' => 'true', 'X-Inertia-Partial-Component' => 'code-lab/show',
+        'X-Inertia-Version' => app(\App\Http\Middleware\HandleInertiaRequests::class)->version(\Illuminate\Http\Request::create('/')),
+        'X-Inertia-Partial-Data' => 'feedback,workspace,nextLesson',
+    ])->assertJsonPath('props.feedback.feedback.0.comment', 'Please add a paragraph.')
+        ->assertJsonPath('props.feedback.feedback.0.teacher.name', $teacher->name)
+        ->assertJsonPath('props.workspace.status', 'needs_revision');
+    $this->get('/dashboard')->assertInertia(fn (Assert $page) => $page
+        ->where('teacherReviews.0.comment', 'Please add a paragraph.')
+        ->where('teacherReviews.0.status', 'needs_revision')->etc());
+    $this->actingAs($other)->get('/dashboard')->assertInertia(fn (Assert $page) => $page->where('teacherReviews', [])->etc());
+    $this->get('/code-lab/'.$lesson->id)->assertInertia(fn (Assert $page) => $page->where('feedback', null)->etc());
 });
 
 test('manual unlocking does not erase an existing lesson status', function () {

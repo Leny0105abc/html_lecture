@@ -1,4 +1,5 @@
-import { Head, Link, usePage } from '@inertiajs/react';
+import { Head, Link, router, usePage, usePoll } from '@inertiajs/react';
+import { useEffect } from 'react';
 import { ArrowRight, BookCheck, BookOpen, Clock3, GraduationCap, Sparkles, Users } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -8,12 +9,20 @@ type TeacherSummary = { totalStudents: number; activeStudents: number; averagePr
 type StudentSummary = { progress: number; completed: number; remaining: number; caseStudies: number; level: string; lastActivity: string };
 type StudentRow = { id: number; name: string; username: string; grade: string; section: string; completed: number; awaitingReview: number; progress: number; lastActivity: string; status: string; levelProgress: Record<string, number>; currentLesson: string; quizAverage: number | null; finalProjectStatus: string };
 type Activity = { event: string; metadata?: { title?: string }; occurred_at: string };
-type Props = { mode: 'teacher' | 'student'; summary: TeacherSummary | StudentSummary; students?: StudentRow[]; nextLesson?: { id: number; number: number; title: string; level: string } | null; recentActivity?: Activity[] };
+type Review = { id: number; lesson: { id: number; number: number; title: string } | null; status: string; version: number; reviewed_at: string; comment: string | null; teacher: string | null };
+type Props = { mode: 'teacher' | 'student'; summary: TeacherSummary | StudentSummary; students?: StudentRow[]; nextLesson?: { id: number; number: number; title: string; level: string } | null; recentActivity?: Activity[]; teacherReviews?: Review[] };
 
 const statClass = 'border-0 bg-white shadow-sm ring-1 ring-slate-200/70';
 
-export default function Dashboard({ mode, summary, students = [], nextLesson, recentActivity = [] }: Props) {
+export default function Dashboard({ mode, summary, students = [], nextLesson, recentActivity = [], teacherReviews = [] }: Props) {
     const { auth } = usePage().props;
+    usePoll(15000, { only: ['teacherReviews', 'summary', 'nextLesson', 'recentActivity'] }, { autoStart: mode === 'student' });
+    useEffect(() => {
+        if (mode !== 'student') return;
+        const refresh = () => router.reload({ only: ['teacherReviews', 'summary', 'nextLesson', 'recentActivity'] });
+        window.addEventListener('focus', refresh);
+        return () => window.removeEventListener('focus', refresh);
+    }, [mode]);
     if (mode === 'teacher') {
         const s = summary as TeacherSummary;
         const stats = [
@@ -68,6 +77,15 @@ export default function Dashboard({ mode, summary, students = [], nextLesson, re
             </section>
             <section className="grid gap-4 sm:grid-cols-3">{cards.map(([label, value, Icon]) => <Card key={label} className={statClass}><CardContent className="flex items-center gap-4 p-5"><span className="grid size-11 place-items-center rounded-2xl bg-indigo-50 text-indigo-600"><Icon className="size-5" /></span><div><p className="text-sm text-muted-foreground">{label}</p><p className="text-2xl font-bold">{value}</p></div></CardContent></Card>)}</section>
             <section className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
+                <Card className={`${statClass} lg:col-span-2`}><CardHeader><CardTitle>Teacher feedback & lesson confirmations</CardTitle><p className="text-sm text-muted-foreground">These remarks confirm your teacher has reviewed your submitted work.</p></CardHeader><CardContent className="space-y-3">
+                    {teacherReviews.length ? teacherReviews.map(review => <article key={review.id} className={`rounded-xl border p-4 ${review.status === 'completed' ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}>
+                        <p className="font-semibold">Lesson {review.lesson?.number}: {review.lesson?.title ?? 'Lesson'}</p>
+                        <p className="mt-1 text-sm font-semibold">{review.status === 'completed' ? '✓ Teacher confirmed: lesson completed' : review.status === 'needs_revision' ? 'Teacher requested changes' : 'Feedback on an earlier submission'}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">{review.teacher ?? 'Your teacher'} · Submission v{review.version} · {new Date(review.reviewed_at).toLocaleString()}</p>
+                        <p className="mt-3 whitespace-pre-wrap break-words text-sm">{review.comment}</p>
+                        {review.lesson && <Button asChild variant="outline" size="sm" className="mt-3"><Link href={`/code-lab/${review.lesson.id}`}>Open lesson</Link></Button>}
+                    </article>) : <p className="text-sm text-muted-foreground">No teacher feedback yet. Your teacher’s remarks will appear here after reviewing your submission.</p>}
+                </CardContent></Card>
                 <Card className={statClass}><CardHeader><CardTitle>Up next</CardTitle></CardHeader><CardContent>{nextLesson ? <div className="rounded-2xl border border-indigo-100 bg-indigo-50/60 p-5"><div className="flex items-center justify-between gap-4"><div><Badge variant="outline">Lesson {nextLesson.number} · {nextLesson.level}</Badge><h2 className="mt-3 text-xl font-bold">{nextLesson.title}</h2><p className="mt-2 text-sm text-muted-foreground">Read the lesson, run and submit your code, then pass the five-question quiz to unlock the next lesson.</p></div><span className="hidden size-16 place-items-center rounded-2xl bg-indigo-600 text-2xl font-bold text-white sm:grid">{nextLesson.number}</span></div></div> : <p className="text-muted-foreground">You completed all lessons. Your case studies are ready!</p>}</CardContent></Card>
                 <Card className={statClass}><CardHeader><CardTitle>Recent activity</CardTitle></CardHeader><CardContent className="space-y-4">{recentActivity.length ? recentActivity.map((item, index) => <div key={`${item.occurred_at}-${index}`} className="flex gap-3"><span className="mt-1 size-2 rounded-full bg-indigo-500" /><div><p className="text-sm font-medium capitalize">{item.event.replaceAll('_', ' ')}</p><p className="text-xs text-muted-foreground">{new Date(item.occurred_at).toLocaleString()}</p></div></div>) : <p className="text-sm text-muted-foreground">Your learning history will appear here.</p>}</CardContent></Card>
             </section>

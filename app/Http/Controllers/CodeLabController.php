@@ -60,7 +60,7 @@ class CodeLabController extends Controller
                 'unlocked' => $progress->status === 'completed' || (bool) $nextProgress?->is_manually_unlocked,
             ] : null,
             'feedback' => Submission::where('user_id', $request->user()->id)->where('lesson_id', $lesson->id)
-                ->with('feedback')->latest('version')->first(),
+                ->with('feedback.teacher:id,name')->latest('version')->first(),
             'aiConfigured' => filled(config('services.openai.key')),
         ]);
     }

@@ -32,6 +32,6 @@ class Submission extends Model
 
     public function feedback(): HasMany
     {
-        return $this->hasMany(TeacherFeedback::class);
+        return $this->hasMany(TeacherFeedback::class)->orderBy('id');
     }
 }

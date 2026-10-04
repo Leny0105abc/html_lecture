@@ -9,4 +9,9 @@ class TeacherFeedback extends Model
     protected $table = 'teacher_feedback';
 
     protected $guarded = [];
+
+    public function teacher(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(User::class, 'teacher_id');
+    }
 }
