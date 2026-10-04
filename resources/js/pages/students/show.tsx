@@ -2,6 +2,7 @@ import { Form, Head, Link, router, usePoll } from '@inertiajs/react';
 import { ArrowLeft, ClipboardCheck, KeyRound, Unlock } from 'lucide-react';
 import { useEffect } from 'react';
 import StudentCredentials from '@/components/student-credentials';
+import DeleteStudent from '@/components/delete-student';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -61,11 +62,14 @@ export default function StudentShow({ student, lessons, summary, submissions, ac
                             <h1 className="mt-3 text-3xl font-bold">{student.name}</h1>
                             <p className="mt-1 text-slate-300">@{student.username} · Grade {student.grade_level}, {student.section}</p>
                         </div>
+                        <div className="flex flex-wrap gap-3">
                         <Form action={`/students/${student.id}/reset-password`} method="post" onSubmit={(event) => {
                             if (!window.confirm(`Issue a temporary password for ${student.name}? Their current password will stop working and they will be signed out.`)) event.preventDefault();
                         }}>
                             {({ processing }) => <Button disabled={processing} className="bg-amber-400 text-slate-950 hover:bg-amber-300"><KeyRound /> Issue temporary password</Button>}
                         </Form>
+                        <DeleteStudent student={student} />
+                        </div>
                     </div>
                 </section>
                 <section className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">

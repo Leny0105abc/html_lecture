@@ -132,6 +132,25 @@ class StudentController extends Controller
         return back()->with('credentials', ['name' => $student->name, 'username' => $student->username, 'password' => $password]);
     }
 
+    public function destroy(Request $request, User $student)
+    {
+        abort_unless($student->role === 'student', 404);
+        $request->validate(['confirmed' => 'required|accepted']);
+        $name = $student->name;
+
+        DB::transaction(function () use ($student) {
+            if (config('session.driver') === 'database') {
+                DB::connection(config('session.connection'))->table(config('session.table', 'sessions'))
+                    ->where('user_id', $student->id)->delete();
+            }
+            DB::table('password_reset_tokens')->where('email', $student->email)->delete();
+            // Foreign keys remove this student's progress, submissions, feedback, and passkeys.
+            $student->delete();
+        });
+
+        return redirect()->route('students.index')->with('success', "{$name}'s account and activity records were deleted.");
+    }
+
     public function unlock(Request $request, User $student, Lesson $lesson)
     {
         $progress = StudentLessonProgress::firstOrNew(['user_id' => $student->id, 'lesson_id' => $lesson->id]);
