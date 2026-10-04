@@ -62,6 +62,10 @@ class SubmissionController extends Controller
             }
         }
         DB::transaction(function () use ($request, $submission, $data) {
+            if ($submission->lesson_id) {
+                StudentLessonProgress::where('user_id', $submission->user_id)->where('lesson_id', $submission->lesson_id)
+                    ->lockForUpdate()->first();
+            }
             $submission->update(['status' => $data['status'], 'reviewed_at' => now(), 'reviewed_by' => $request->user()->id]);
             TeacherFeedback::create(['submission_id' => $submission->id, 'teacher_id' => $request->user()->id, 'comment' => $data['comment']]);
             if ($submission->lesson_id) {

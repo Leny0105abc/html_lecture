@@ -71,6 +71,7 @@ test('teacher approval unlocks the next lesson and shows a continue link', funct
         ->component('code-lab/show')
         ->where('workspace.status', 'completed')
         ->where('feedback.status', 'completed')
+        ->where('workspace.is_read_only', true)
         ->where('feedback.feedback.0.comment', 'Good work')
         ->where('feedback.feedback.0.teacher.name', $teacher->name)
         ->where('nextLesson.id', $second->id)
@@ -140,6 +141,29 @@ test('student remarks refresh through partial requests and remain private', func
         ->where('teacherReviews.0.status', 'needs_revision')->etc());
     $this->actingAs($other)->get('/dashboard')->assertInertia(fn (Assert $page) => $page->where('teacherReviews', [])->etc());
     $this->get('/code-lab/'.$lesson->id)->assertInertia(fn (Assert $page) => $page->where('feedback', null)->etc());
+});
+
+test('teacher confirmed lessons are read only but revisions can be edited', function () {
+    $teacher = User::factory()->create(['role' => 'teacher']);
+    $student = User::factory()->create();
+    $lesson = makeLesson(1);
+    $next = makeLesson(2);
+    $progress = StudentLessonProgress::create(['user_id' => $student->id, 'lesson_id' => $lesson->id, 'status' => 'submitted', 'html_code' => '<h1>Approved code</h1>'])->refresh();
+    $submission = Submission::create(['user_id' => $student->id, 'lesson_id' => $lesson->id, 'version' => 1, 'status' => 'submitted', 'html_code' => $progress->html_code, 'submitted_at' => now()]);
+    $this->actingAs($teacher)->post('/submissions/'.$submission->id.'/review', ['status' => 'completed', 'comment' => 'Finished!'])->assertRedirect();
+    $this->actingAs($student)->get('/code-lab/'.$lesson->id)->assertInertia(fn (Assert $page) => $page->where('workspace.is_read_only', true)->where('nextLesson.unlocked', true)->etc());
+    $this->get('/code-lab/'.$next->id)->assertOk();
+    $code = ['html_code' => '<h1>Changed</h1>', 'css_code' => '', 'version' => $progress->version];
+    $this->putJson('/code-lab/'.$lesson->id.'/save', $code)->assertForbidden();
+    $this->postJson('/code-lab/'.$lesson->id.'/check', $code)->assertForbidden();
+    $this->postJson('/code-lab/'.$lesson->id.'/submit', $code)->assertForbidden();
+    $this->postJson('/code-lab/'.$lesson->id.'/quiz', ['answers' => [0, 0, 0, 0, 0]])->assertForbidden();
+    expect($progress->fresh()->html_code)->toBe('<h1>Approved code</h1>');
+    expect($progress->fresh()->version)->toBe($progress->version);
+    expect(Submission::where('user_id', $student->id)->count())->toBe(1);
+    $this->actingAs($teacher)->post('/submissions/'.$submission->id.'/review', ['status' => 'needs_revision', 'comment' => 'Please revise.'])->assertRedirect();
+    $this->actingAs($student)->get('/code-lab/'.$lesson->id)->assertInertia(fn (Assert $page) => $page->where('workspace.is_read_only', false)->etc());
+    $this->putJson('/code-lab/'.$lesson->id.'/save', $code)->assertOk();
 });
 
 test('manual unlocking does not erase an existing lesson status', function () {

@@ -10,7 +10,7 @@ import { Card } from '@/components/ui/card';
 type LessonGuide = { steps: string[]; focus: { code: string; meaning: string }[]; html_hint: string; css_hint: string; tip: string };
 type QuizQuestion = { question: string; choices: string[] };
 type Lesson = { id: number; number: number; title: string; level: string; objectives: string[]; introduction: string; explanation: string; syntax?: string; example_html?: string; example_css?: string; activity_html?: string; activity_css?: string; important_notes?: string; guided_practice: string; activity: string; expected_result: string; challenge?: string; completion_requirements: string; starter_html: string; starter_css: string; guide?: LessonGuide; quiz?: QuizQuestion[] };
-type Workspace = { html_code: string; css_code: string; extra_files?: Record<string, string> | null; js_code?: string; status: string; version: number; last_saved_at?: string; quiz_score?: number | null; quiz_passed_at?: string | null; activity_passed_at?: string | null };
+type Workspace = { is_read_only: boolean; html_code: string; css_code: string; extra_files?: Record<string, string> | null; js_code?: string; status: string; version: number; last_saved_at?: string; quiz_score?: number | null; quiz_passed_at?: string | null; activity_passed_at?: string | null };
 type Feedback = TeacherReview | null;
 type NextLesson = { id: number; number: number; title: string; unlocked: boolean } | null;
 type PreviousLesson = { id: number; number: number; title: string } | null;
@@ -49,6 +49,9 @@ export default function CodeLab({ lesson, workspace, previousLesson, nextLesson,
     const quizRef = useRef<HTMLDivElement>(null);
     const firstRender = useRef(true);
     const currentVersion = useRef(version);
+    const readOnly = workspace.is_read_only;
+    const readOnlyRef = useRef(readOnly);
+    readOnlyRef.current = readOnly;
     currentVersion.current = version;
     usePoll(15000, { only: ['workspace', 'nextLesson', 'feedback'] });
     const isHtmlOnly = lesson.level !== 'Advanced';
@@ -61,6 +64,7 @@ export default function CodeLab({ lesson, workspace, previousLesson, nextLesson,
     const expectedSrcDoc = useMemo(() => withStyles(lesson.activity_html ?? lesson.example_html ?? '', isHtmlOnly ? '' : lesson.activity_css ?? lesson.example_css ?? ''), [lesson.activity_html, lesson.activity_css, lesson.example_html, lesson.example_css, isHtmlOnly]);
 
     const save = async (quiet = false) => {
+        if (readOnlyRef.current) return false;
         setSaveState('saving');
         const response = await fetch(`/code-lab/${lesson.id}/save`, { method: 'PUT', headers: requestHeaders(), body: JSON.stringify({ html_code: html, css_code: isHtmlOnly ? '' : css, extra_files: isFinalProject ? extraFiles : {}, js_code: '', version: currentVersion.current }) });
         const data = await response.json();
@@ -71,7 +75,7 @@ export default function CodeLab({ lesson, workspace, previousLesson, nextLesson,
     useEffect(() => {
         if (firstRender.current) { firstRender.current = false; return; }
         setSaveState('unsaved');
-        const timer = window.setTimeout(() => { void save(true); }, 1800);
+        const timer = window.setTimeout(() => { if (!readOnlyRef.current) void save(true); }, 1800);
         return () => window.clearTimeout(timer);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [html, css, extraFiles]);
@@ -83,6 +87,7 @@ export default function CodeLab({ lesson, workspace, previousLesson, nextLesson,
     }, []);
 
     const run = () => {
+        if (readOnlyRef.current) return;
         setPreviewHtml(html); setPreviewCss(isHtmlOnly ? '' : css); setPreviewExtraFiles(extraFiles);
         setOutputView('live'); setMobileTab('output');
         void fetch(`/code-lab/${lesson.id}/check`, { method: 'POST', headers: requestHeaders(), body: JSON.stringify({ html_code: html, css_code: isHtmlOnly ? '' : css, extra_files: isFinalProject ? extraFiles : {} }) })
@@ -91,11 +96,13 @@ export default function CodeLab({ lesson, workspace, previousLesson, nextLesson,
     };
     const showActivityGuide = () => { setOutputView('guide'); setMobileTab('output'); };
     const openQuiz = () => {
+        if (readOnlyRef.current) return;
         setMobileTab('lesson');
         window.requestAnimationFrame(() => quizRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
     };
-    const reset = () => { if (window.confirm('Reset your editor to the starter code? Your current edits will be replaced.')) { setHtml(lesson.starter_html); setCss(lesson.starter_css); setExtraFiles({}); setCodeChecked(false); } };
+    const reset = () => { if (readOnlyRef.current) return; if (window.confirm('Reset your editor to the starter code? Your current edits will be replaced.')) { setHtml(lesson.starter_html); setCss(lesson.starter_css); setExtraFiles({}); setCodeChecked(false); } };
     const submit = async () => {
+        if (readOnlyRef.current) return;
         if (!window.confirm('Are you sure you want to submit this activity?')) return;
         if (saveState !== 'saved' && !(await save(true))) return;
         const response = await fetch(`/code-lab/${lesson.id}/submit`, { method: 'POST', headers: requestHeaders(), body: JSON.stringify({ html_code: html, css_code: isHtmlOnly ? '' : css, extra_files: isFinalProject ? extraFiles : {}, js_code: '', version: currentVersion.current }) });
@@ -109,6 +116,7 @@ export default function CodeLab({ lesson, workspace, previousLesson, nextLesson,
         }
     };
     const submitQuiz = async () => {
+        if (readOnlyRef.current) return;
         if (!lesson.quiz || lesson.quiz.some((_, index) => quizAnswers[index] === undefined)) {
             toast.error('Answer all five questions first.'); return;
         }
@@ -136,7 +144,7 @@ export default function CodeLab({ lesson, workspace, previousLesson, nextLesson,
         <p className="mt-1 text-sm text-indigo-800">Score at least 4 out of 5 and pass the coding activity to complete this lesson.</p>
         {workspace.quiz_score !== null && workspace.quiz_score !== undefined && <p className="mt-2 text-sm font-semibold">Latest score: {workspace.quiz_score}/5 {workspace.quiz_passed_at ? '· Passed' : '· Try again'}</p>}
         {!workspace.quiz_passed_at && <div className="mt-4 space-y-5">
-            {lesson.quiz.map((item, index) => <fieldset key={item.question} className="rounded-xl bg-white p-3">
+            {lesson.quiz.map((item, index) => <fieldset disabled={readOnly} key={item.question} className="rounded-xl bg-white p-3">
                 <legend className="font-semibold">{index + 1}. {item.question}</legend>
                 <div className="mt-2 space-y-2">{item.choices.map((choice, choiceIndex) => <label key={choice} className="flex cursor-pointer gap-2 text-sm">
                     <input type="radio" name={`quiz-${lesson.id}-${index}`} checked={quizAnswers[index] === choiceIndex} onChange={() => setQuizAnswers((current) => ({ ...current, [index]: choiceIndex }))} />
@@ -144,7 +152,7 @@ export default function CodeLab({ lesson, workspace, previousLesson, nextLesson,
                 </label>)}</div>
                 {quizResult && <p className={`mt-2 text-sm ${quizResult.feedback[index].correct ? 'text-emerald-700' : 'text-rose-700'}`}>{quizResult.feedback[index].correct ? 'Correct.' : `Correct answer: ${String.fromCharCode(65 + quizResult.feedback[index].correctAnswer)}.`} {quizResult.feedback[index].explanation}</p>}
             </fieldset>)}
-            <Button type="button" onClick={() => void submitQuiz()} disabled={quizBusy}>{quizBusy ? 'Checking…' : 'Submit quiz'}</Button>
+            <Button type="button" onClick={() => void submitQuiz()} disabled={readOnly || quizBusy}>{quizBusy ? 'Checking…' : 'Submit quiz'}</Button>
         </div>}
         {workspace.quiz_passed_at && <p className="mt-3 text-sm text-emerald-800">Quiz passed. {workspace.status === 'completed' ? 'You can continue to the next lesson.' : 'Submit your coding activity to finish.'}</p>}
     </div>;
@@ -162,7 +170,7 @@ export default function CodeLab({ lesson, workspace, previousLesson, nextLesson,
             <span className="text-xs text-slate-400">{saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? 'Saved' : 'Unsaved'}</span>
         </div>
         <label className="sr-only" htmlFor="code-editor">{file} editor</label>
-        <textarea id="code-editor" value={editorValue} onChange={(event) => editFile(event.target.value)} spellCheck={false} className="code-surface min-h-0 flex-1 resize-none border-0 p-5 text-[14px] leading-6 outline-none" />
+        <textarea readOnly={readOnly} aria-label={readOnly ? "Completed activity (read-only)" : "Activity code"} id="code-editor" value={editorValue} onChange={(event) => editFile(event.target.value)} spellCheck={false} className="code-surface min-h-0 flex-1 resize-none border-0 p-5 text-[14px] leading-6 outline-none" />
     </div>;
     const outputPanel = <div className="flex h-full min-h-0 flex-col bg-white"><div className="flex shrink-0 items-center justify-between gap-2 border-b px-3 py-2"><div className="grid min-w-0 flex-1 grid-cols-3 rounded-lg bg-slate-100 p-1"><button type="button" onClick={() => setOutputView('live')} className={`rounded-md px-2 py-1.5 text-xs font-semibold ${outputView === 'live' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500'}`}>My live output</button><button type="button" onClick={() => setOutputView('suggested')} className={`rounded-md px-2 py-1.5 text-xs font-semibold ${outputView === 'suggested' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500'}`}>Activity output</button><button type="button" onClick={() => setOutputView('guide')} className={`rounded-md px-2 py-1.5 text-xs font-semibold ${outputView === 'guide' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500'}`}>Guide</button></div><Button size="icon" variant="ghost" onClick={() => iframe.current?.requestFullscreen()} aria-label="Full screen output"><Expand /></Button></div><div className="flex shrink-0 items-center justify-between gap-2 border-b bg-indigo-50 px-4 py-2 text-xs text-indigo-800"><span>{outputView === 'live' ? 'Your latest result. Press Run after changing your code.' : outputView === 'suggested' ? 'Compare this activity result with your own live output.' : 'Follow the steps and use the example as a hint.'}</span>{outputView === 'guide' && <button type="button" onClick={() => guideScroll.current?.scrollTo({ top: guideScroll.current.scrollHeight, behavior: 'smooth' })} className="shrink-0 font-semibold underline underline-offset-2">See example</button>}</div>{isFinalProject && outputView === 'live' && <div className="flex shrink-0 gap-1 overflow-x-auto border-b px-2 py-1">{files.filter((name) => name.endsWith('.html')).map((name) => <button key={name} type="button" onClick={() => setPreviewFile(name)} className={`rounded px-2 py-1 text-xs ${previewFile === name ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-700'}`}>{name}</button>)}</div>}{outputView === 'live' ? <iframe ref={iframe} title="Student code preview" sandbox="allow-same-origin" srcDoc={srcDoc} onLoad={() => { if (!isFinalProject) return; const doc = iframe.current?.contentDocument; doc?.addEventListener('click', (event) => { const target = event.target as HTMLElement | null; const link = target?.closest?.('a[href]'); const href = link?.getAttribute('href'); if (href && files.includes(href) && href.endsWith('.html')) { event.preventDefault(); setPreviewFile(href); } }); }} className="min-h-0 flex-1 bg-white" /> : outputView === 'suggested' ? <iframe ref={iframe} title={`Activity output for ${lesson.title}`} sandbox="" srcDoc={expectedSrcDoc} className="min-h-0 flex-1 bg-white" /> : <div ref={guideScroll} className="min-h-0 flex-1 overscroll-contain overflow-y-auto pb-4"><div className="m-4 rounded-2xl border border-amber-200 bg-amber-50 p-4"><div className="flex items-center gap-2 font-bold text-amber-900"><Lightbulb className="size-5" />Your activity to complete</div><p className="mt-2 text-sm leading-6 text-amber-950">{lesson.activity}</p></div>{guidePanel}</div>}</div>;
     const aiPanel = <div className="flex h-full min-h-[480px] flex-col bg-white p-4"><div className="flex items-center gap-2"><span className="grid size-10 place-items-center rounded-xl bg-indigo-600 text-white"><Bot /></span><div><h2 className="font-bold">Learning tutor</h2><p className="text-xs text-muted-foreground">Hints and explanations, not answers</p></div></div><div className="mt-4 flex-1 overflow-y-auto rounded-2xl bg-indigo-50 p-4 text-sm leading-6 text-slate-700">{answer}</div><div className="mt-3 flex flex-wrap gap-2">{['Explain my code', 'Find the error', 'Give me a hint'].map(action => <Button key={action} size="sm" variant="outline" onClick={() => void ask(action)} disabled={asking}>{action}</Button>)}</div><div className="mt-3 flex gap-2"><input value={question} onChange={e => setQuestion(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') void ask(); }} placeholder="Ask about your code…" className="min-w-0 flex-1 rounded-xl border px-3 text-sm" /><Button size="icon" onClick={() => void ask()} disabled={asking} aria-label="Ask AI tutor"><Send /></Button></div></div>;
@@ -171,7 +179,7 @@ export default function CodeLab({ lesson, workspace, previousLesson, nextLesson,
         : workspace.status === 'needs_revision'
             ? <div className="shrink-0 border-b border-rose-200 bg-rose-50 px-4 py-2 text-sm text-rose-950">Your teacher requested changes. Update your code, then submit the activity again.</div>
             : workspace.activity_passed_at && !workspace.quiz_passed_at
-                ? <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-950"><span>Coding activity passed. Score at least 4/5 on the quiz to unlock the next lesson.</span><Button size="sm" variant="outline" onClick={openQuiz}>Go to quiz</Button></div>
+                ? <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-950"><span>Coding activity passed. Score at least 4/5 on the quiz to unlock the next lesson.</span><Button size="sm" variant="outline" disabled={readOnly} onClick={openQuiz}>Go to quiz</Button></div>
             : workspace.quiz_passed_at && !workspace.activity_passed_at
                 ? <div className="shrink-0 border-b border-indigo-200 bg-indigo-50 px-4 py-2 text-sm text-indigo-950">Quiz passed. Finish and submit your coding activity to unlock the next lesson.</div>
             : workspace.status === 'submitted'
@@ -180,7 +188,7 @@ export default function CodeLab({ lesson, workspace, previousLesson, nextLesson,
                 ? <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-950"><span>All lessons completed.</span><Button asChild size="sm" className="bg-emerald-700 hover:bg-emerald-600"><Link href="/case-studies">Continue to case studies <ArrowRight /></Link></Button></div>
                 : <div className="shrink-0 border-b border-indigo-200 bg-indigo-50 px-4 py-2 text-sm text-indigo-950">Your work is not submitted yet. Run your code, fix the activity hints, submit it, and pass the quiz to unlock the next lesson.</div>;
 
-    return <><Head title={`Lesson ${lesson.number}: ${lesson.title}`} /><main className="flex h-[calc(100dvh-4rem)] min-h-0 flex-col overflow-hidden bg-slate-100"><header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b bg-white px-3 py-3 sm:px-5"><div className="flex min-w-0 items-center gap-2"><Button asChild size="icon" variant="ghost"><Link href="/lessons" aria-label="Back to lessons"><ChevronLeft /></Link></Button><div className="min-w-0"><p className="truncate text-sm font-bold">Lesson {lesson.number}: {lesson.title}</p><p className="text-xs text-muted-foreground capitalize">Status: {workspace.status.replace('_', ' ')}</p></div></div><div className="flex flex-wrap gap-2">{previousLesson && <Button asChild size="sm" variant="outline"><Link href={`/code-lab/${previousLesson.id}`}>Previous lesson</Link></Button>}<Button size="sm" variant="outline" onClick={reset} aria-label="Reset editor"><RotateCcw /> <span className="hidden sm:inline">Reset</span></Button><Button size="sm" variant="outline" onClick={() => void save()} aria-label="Save activity"><Save /> <span className="hidden sm:inline">Save activity</span></Button><Button size="sm" onClick={run} className="bg-emerald-600 hover:bg-emerald-500"><Play /> Run</Button><Button size="sm" onClick={() => void submit()} className="bg-indigo-600 hover:bg-indigo-500">{workspace.status === 'completed' ? 'Resubmit activity' : 'Submit activity'}</Button>{lesson.quiz?.length === 5 && <Button size="sm" variant="outline" onClick={openQuiz}>Quiz</Button>}{nextLesson && (nextLesson.unlocked ? <Button asChild size="sm"><Link href={`/code-lab/${nextLesson.id}`}>Next lesson <ArrowRight /></Link></Button> : <Button size="sm" disabled>Next lesson locked</Button>)}</div></header>{progressNotice}{codeChecked && <div className={`max-h-32 shrink-0 overflow-y-auto border-b px-4 py-2 text-sm ${codeIssues.length ? 'border-amber-200 bg-amber-50 text-amber-950' : 'border-emerald-200 bg-emerald-50 text-emerald-950'}`}>{codeIssues.length ? <><strong>Activity hints:</strong><ul className="ml-5 list-disc">{codeIssues.map((issue) => <li key={issue}>{issue}</li>)}</ul></> : 'Coding checks passed. Submit the activity to record it.'}</div>}<LessonTeacherReview review={feedback} /><nav className="grid shrink-0 grid-cols-4 border-b bg-white lg:hidden">{(['lesson', 'code', 'output', 'ai'] as const).map(tab => <button key={tab} onClick={() => setMobileTab(tab)} className={`py-3 text-sm font-medium capitalize ${mobileTab === tab ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-muted-foreground'}`}>{tab}</button>)}</nav><div className="min-h-0 flex-1 lg:grid lg:grid-cols-[minmax(260px,.7fr)_minmax(360px,1fr)_minmax(360px,1fr)] lg:gap-px lg:bg-slate-300"><section className={`${mobileTab === 'lesson' ? 'block' : 'hidden'} h-full min-h-0 lg:block`}>{lessonPanel}</section><section className={`${mobileTab === 'code' ? 'block' : 'hidden'} h-full min-h-0 lg:block`}>{codePanel}</section><section className={`${mobileTab === 'output' ? 'block' : 'hidden'} h-full min-h-0 lg:block`}>{outputPanel}</section><section className={`${mobileTab === 'ai' ? 'block' : 'hidden'} h-full min-h-0 lg:hidden`}>{aiPanel}</section></div></main></>;
+    return <><Head title={`Lesson ${lesson.number}: ${lesson.title}`} /><main className="flex h-[calc(100dvh-4rem)] min-h-0 flex-col overflow-hidden bg-slate-100"><header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b bg-white px-3 py-3 sm:px-5"><div className="flex min-w-0 items-center gap-2"><Button asChild size="icon" variant="ghost"><Link href="/lessons" aria-label="Back to lessons"><ChevronLeft /></Link></Button><div className="min-w-0"><p className="truncate text-sm font-bold">Lesson {lesson.number}: {lesson.title}</p><p className="text-xs text-muted-foreground capitalize">Status: {workspace.status.replace('_', ' ')}</p></div></div><div className="flex flex-wrap gap-2">{previousLesson && <Button asChild size="sm" variant="outline"><Link href={`/code-lab/${previousLesson.id}`}>Previous lesson</Link></Button>}<Button size="sm" variant="outline" disabled={readOnly} onClick={reset} aria-label="Reset editor"><RotateCcw /> <span className="hidden sm:inline">Reset</span></Button><Button size="sm" variant="outline" disabled={readOnly} onClick={() => void save()} aria-label="Save activity"><Save /> <span className="hidden sm:inline">Save activity</span></Button><Button size="sm" disabled={readOnly} onClick={run} className="bg-emerald-600 hover:bg-emerald-500"><Play /> Run</Button><Button size="sm" disabled={readOnly} onClick={() => void submit()} className="bg-indigo-600 hover:bg-indigo-500">{workspace.status === 'completed' ? 'Resubmit activity' : 'Submit activity'}</Button>{lesson.quiz?.length === 5 && <Button size="sm" variant="outline" disabled={readOnly} onClick={openQuiz}>Quiz</Button>}{nextLesson && (nextLesson.unlocked ? <Button asChild size="sm"><Link href={`/code-lab/${nextLesson.id}`}>Next lesson <ArrowRight /></Link></Button> : <Button size="sm" disabled>Next lesson locked</Button>)}</div></header>{readOnly && <p className="shrink-0 border-b border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-950">This teacher-confirmed activity is read-only. You can view your work and continue to the next lesson.</p>}{progressNotice}{codeChecked && <div className={`max-h-32 shrink-0 overflow-y-auto border-b px-4 py-2 text-sm ${codeIssues.length ? 'border-amber-200 bg-amber-50 text-amber-950' : 'border-emerald-200 bg-emerald-50 text-emerald-950'}`}>{codeIssues.length ? <><strong>Activity hints:</strong><ul className="ml-5 list-disc">{codeIssues.map((issue) => <li key={issue}>{issue}</li>)}</ul></> : 'Coding checks passed. Submit the activity to record it.'}</div>}<LessonTeacherReview review={feedback} /><nav className="grid shrink-0 grid-cols-4 border-b bg-white lg:hidden">{(['lesson', 'code', 'output', 'ai'] as const).map(tab => <button key={tab} onClick={() => setMobileTab(tab)} className={`py-3 text-sm font-medium capitalize ${mobileTab === tab ? 'border-b-2 border-indigo-600 text-indigo-600' : 'text-muted-foreground'}`}>{tab}</button>)}</nav><div className="min-h-0 flex-1 lg:grid lg:grid-cols-[minmax(260px,.7fr)_minmax(360px,1fr)_minmax(360px,1fr)] lg:gap-px lg:bg-slate-300"><section className={`${mobileTab === 'lesson' ? 'block' : 'hidden'} h-full min-h-0 lg:block`}>{lessonPanel}</section><section className={`${mobileTab === 'code' ? 'block' : 'hidden'} h-full min-h-0 lg:block`}>{codePanel}</section><section className={`${mobileTab === 'output' ? 'block' : 'hidden'} h-full min-h-0 lg:block`}>{outputPanel}</section><section className={`${mobileTab === 'ai' ? 'block' : 'hidden'} h-full min-h-0 lg:hidden`}>{aiPanel}</section></div></main></>;
 }
 
 CodeLab.layout = null;

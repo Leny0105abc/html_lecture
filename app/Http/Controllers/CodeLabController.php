@@ -15,6 +15,20 @@ use Inertia\Response;
 
 class CodeLabController extends Controller
 {
+    private function teacherCompleted(int $userId, int $lessonId): bool
+    {
+        $submission = Submission::where('user_id', $userId)->where('lesson_id', $lessonId)
+            ->latest('version')->first(['status', 'reviewed_at', 'reviewed_by']);
+
+        return $submission?->status === 'completed' && $submission->reviewed_at !== null && $submission->reviewed_by !== null;
+    }
+
+    private function ensureEditable(Request $request, Lesson $lesson): void
+    {
+        abort_if($this->teacherCompleted($request->user()->id, $lesson->id), 403,
+            'Your teacher confirmed this lesson completed. The activity is now read-only.');
+    }
+
     private function ensureUnlocked(Request $request, Lesson $lesson): void
     {
         $progress = StudentLessonProgress::where('user_id', $request->user()->id)->where('lesson_id', $lesson->id)->first();
@@ -50,6 +64,7 @@ class CodeLabController extends Controller
 
         $workspace = $progress->only('html_code', 'css_code', 'js_code', 'extra_files', 'status', 'version', 'last_saved_at', 'quiz_score', 'quiz_answers', 'quiz_passed_at', 'activity_passed_at');
         $workspace['html_code'] = $validator->normalizeLegacyHtml($lesson, $workspace['html_code'] ?? '');
+        $workspace['is_read_only'] = $this->teacherCompleted($request->user()->id, $lesson->id);
 
         return Inertia::render('code-lab/show', [
             'lesson' => $lessonData,
@@ -68,11 +83,13 @@ class CodeLabController extends Controller
     public function save(Request $request, Lesson $lesson, LessonCodeValidator $validator)
     {
         $this->ensureUnlocked($request, $lesson);
+        $this->ensureEditable($request, $lesson);
         $data = $this->validatedCode($request);
         $data['html_code'] = $validator->normalizeLegacyHtml($lesson, $data['html_code']);
 
         $progress = DB::transaction(function () use ($request, $lesson, $data) {
             $progress = StudentLessonProgress::where('user_id', $request->user()->id)->where('lesson_id', $lesson->id)->lockForUpdate()->firstOrFail();
+            $this->ensureEditable($request, $lesson);
             if ($progress->version !== (int) $data['version']) {
                 throw ValidationException::withMessages(['version' => 'A newer save exists. Refresh before saving again.']);
             }
@@ -101,6 +118,7 @@ class CodeLabController extends Controller
     public function check(Request $request, Lesson $lesson, LessonCodeValidator $validator)
     {
         $this->ensureUnlocked($request, $lesson);
+        $this->ensureEditable($request, $lesson);
         $data = $this->validatedCode($request, false);
         $data['html_code'] = $validator->normalizeLegacyHtml($lesson, $data['html_code']);
         $errors = $validator->check($lesson, $data['html_code'], $lesson->level !== 'Advanced' ? '' : ($data['css_code'] ?? ''), $data['extra_files'] ?? []);
@@ -111,6 +129,7 @@ class CodeLabController extends Controller
     public function submit(Request $request, Lesson $lesson, LessonCodeValidator $validator)
     {
         $this->ensureUnlocked($request, $lesson);
+        $this->ensureEditable($request, $lesson);
         $data = $this->validatedCode($request);
         $data['html_code'] = $validator->normalizeLegacyHtml($lesson, $data['html_code']);
         $css = $lesson->level !== 'Advanced' ? '' : ($data['css_code'] ?? '');
@@ -121,6 +140,7 @@ class CodeLabController extends Controller
 
         $submission = DB::transaction(function () use ($request, $lesson, $data, $css) {
             $progress = StudentLessonProgress::where('user_id', $request->user()->id)->where('lesson_id', $lesson->id)->lockForUpdate()->firstOrFail();
+            $this->ensureEditable($request, $lesson);
             if ($progress->version !== (int) $data['version']) {
                 throw ValidationException::withMessages(['version' => 'Please save or refresh your latest work before submitting.']);
             }
@@ -155,6 +175,7 @@ class CodeLabController extends Controller
     public function quiz(Request $request, Lesson $lesson)
     {
         $this->ensureUnlocked($request, $lesson);
+        $this->ensureEditable($request, $lesson);
         $questions = $lesson->quiz ?? [];
         abort_unless(count($questions) === 5, 404);
         $data = $request->validate(['answers' => 'required|array|size:5', 'answers.*' => 'required|integer|between:0,3']);
@@ -172,6 +193,7 @@ class CodeLabController extends Controller
         }
         $progress = DB::transaction(function () use ($request, $lesson, $data, $score) {
             $progress = StudentLessonProgress::where('user_id', $request->user()->id)->where('lesson_id', $lesson->id)->lockForUpdate()->firstOrFail();
+            $this->ensureEditable($request, $lesson);
             $passed = $score >= 4 || (bool) $progress->quiz_passed_at;
             $complete = $passed && ($progress->activity_passed_at || $progress->status === 'completed');
             $progress->update([
