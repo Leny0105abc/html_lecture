@@ -1,6 +1,7 @@
 import { Form, Head, Link, router, usePoll } from '@inertiajs/react';
 import { ArrowLeft, ClipboardCheck, KeyRound, Unlock } from 'lucide-react';
 import { useEffect } from 'react';
+import StudentCredentials from '@/components/student-credentials';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -49,6 +50,7 @@ export default function StudentShow({ student, lessons, summary, submissions, ac
 
     return <>
         <Head title={student.name} />
+        <StudentCredentials />
         <main className="soft-grid min-h-full p-4 sm:p-6 lg:p-8">
             <div className="mx-auto max-w-6xl space-y-6">
                 <Button asChild variant="ghost"><Link href="/students"><ArrowLeft /> Back to students</Link></Button>
@@ -59,8 +61,10 @@ export default function StudentShow({ student, lessons, summary, submissions, ac
                             <h1 className="mt-3 text-3xl font-bold">{student.name}</h1>
                             <p className="mt-1 text-slate-300">@{student.username} · Grade {student.grade_level}, {student.section}</p>
                         </div>
-                        <Form action={`/students/${student.id}/reset-password`} method="post">
-                            <Button className="bg-amber-400 text-slate-950 hover:bg-amber-300"><KeyRound /> Reset password</Button>
+                        <Form action={`/students/${student.id}/reset-password`} method="post" onSubmit={(event) => {
+                            if (!window.confirm(`Issue a temporary password for ${student.name}? Their current password will stop working and they will be signed out.`)) event.preventDefault();
+                        }}>
+                            {({ processing }) => <Button disabled={processing} className="bg-amber-400 text-slate-950 hover:bg-amber-300"><KeyRound /> Issue temporary password</Button>}
                         </Form>
                     </div>
                 </section>

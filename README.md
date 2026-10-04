@@ -5,7 +5,7 @@ CodeLab Academy is a responsive HTML and CSS learning platform for teachers and 
 ## Features
 
 - Username-based authentication with rate limiting, secure password hashing, disabled-account checks, and role authorization
-- Teacher-generated student usernames and cryptographically secure five-letter temporary passwords
+- Teacher-generated student usernames and 12-character temporary passwords, including teacher-assisted recovery and required password change before lessons
 - 15 seeded lessons: five HTML-only Basic lessons, five HTML-only Moderate lessons, and five Advanced HTML/CSS lessons
 - Five-question quiz per lesson; a score of at least 4/5 plus a passing coding check unlocks the next lesson
 - Lesson-specific, non-exact-match HTML/CSS checks with actionable feedback

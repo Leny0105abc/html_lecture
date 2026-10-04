@@ -34,7 +34,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('lessons', [LessonController::class, 'store'])->name('lessons.store');
         Route::delete('lessons/{lesson}', [LessonController::class, 'destroy'])->name('lessons.destroy');
         Route::resource('students', StudentController::class)->only(['index', 'store', 'show', 'update']);
-        Route::post('students/{student}/reset-password', [StudentController::class, 'resetPassword'])->name('students.reset-password');
+        Route::post('students/{student}/reset-password', [StudentController::class, 'resetPassword'])->middleware('throttle:10,1')->name('students.reset-password');
         Route::post('students/{student}/unlock/{lesson}', [StudentController::class, 'unlock'])->name('students.unlock');
         Route::get('submissions', [SubmissionController::class, 'index'])->name('submissions.index');
         Route::get('submissions/{submission}', [SubmissionController::class, 'show'])->name('submissions.show');

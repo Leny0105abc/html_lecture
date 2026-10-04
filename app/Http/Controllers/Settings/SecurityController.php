@@ -55,6 +55,7 @@ class SecurityController extends Controller
      */
     public function update(PasswordUpdateRequest $request): RedirectResponse
     {
+        $wasTemporary = $request->user()->must_change_password;
         $request->user()->update([
             'password' => $request->password,
             'must_change_password' => false,
@@ -62,6 +63,8 @@ class SecurityController extends Controller
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Password updated.')]);
 
-        return back();
+        $request->session()->regenerate();
+
+        return $wasTemporary ? redirect()->route('dashboard') : back();
     }
 }

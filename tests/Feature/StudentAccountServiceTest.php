@@ -3,9 +3,9 @@
 use App\Models\User;
 use App\Services\StudentAccountService;
 
-test('temporary passwords contain exactly five lowercase letters', function () {
+test('temporary passwords are twelve random alphanumeric characters', function () {
     $password = app(StudentAccountService::class)->temporaryPassword();
-    expect($password)->toMatch('/^[a-z]{5}$/');
+    expect($password)->toMatch('/^[a-zA-Z0-9]{12}$/');
 });
 
 test('usernames are normalized and made unique', function () {

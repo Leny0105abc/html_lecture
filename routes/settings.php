@@ -6,6 +6,11 @@ use Illuminate\Auth\Middleware\RequirePassword;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth'])->group(function () {
+    Route::get('change-temporary-password', function () {
+        abort_unless(request()->user()->role === 'student', 403);
+
+        return \Inertia\Inertia::render('auth/change-temporary-password');
+    })->name('student-password.edit');
     Route::redirect('settings', '/settings/profile');
 
     Route::get('settings/profile', [ProfileController::class, 'edit'])->name('profile.edit');

@@ -8,7 +8,9 @@ use App\Models\Submission;
 use App\Models\User;
 use App\Services\StudentAccountService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -114,8 +116,18 @@ class StudentController extends Controller
 
     public function resetPassword(User $student, StudentAccountService $accounts)
     {
+        abort_unless($student->role === 'student', 404);
         $password = $accounts->temporaryPassword();
-        $student->update(['password' => Hash::make($password), 'must_change_password' => true]);
+        DB::transaction(function () use ($student, $password) {
+            $student->update([
+                'password' => Hash::make($password), 'must_change_password' => true,
+                'remember_token' => Str::random(60),
+            ]);
+            if (config('session.driver') === 'database') {
+                DB::connection(config('session.connection'))->table(config('session.table', 'sessions'))
+                    ->where('user_id', $student->id)->delete();
+            }
+        });
 
         return back()->with('credentials', ['name' => $student->name, 'username' => $student->username, 'password' => $password]);
     }

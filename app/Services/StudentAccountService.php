@@ -23,12 +23,6 @@ class StudentAccountService
 
     public function temporaryPassword(): string
     {
-        $letters = 'abcdefghijklmnopqrstuvwxyz';
-        $password = '';
-        for ($i = 0; $i < 5; $i++) {
-            $password .= $letters[random_int(0, 25)];
-        }
-
-        return $password;
+        return Str::password(12, symbols: false);
     }
 }
