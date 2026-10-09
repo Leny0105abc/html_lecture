@@ -39,6 +39,13 @@ composer run dev
 
 Open the configured `APP_URL`. In Laravel Herd, this project is available at `http://studproj_html_css.test/`.
 
+## Computer-lab LAN access
+
+For a computer lab without internet, see [LAN setup](docs/LAN.md). On Windows,
+after building assets, run `powershell -ExecutionPolicy Bypass -File .\scripts\start-lan.ps1`
+and open the printed server address from student PCs. Use Apache/Nginx for regular
+whole-class sessions.
+
 ## Database
 
 The default `.env.example` uses SQLite. This local project is configured for MySQL. To use MySQL on a new installation, create a database and database user, then set:

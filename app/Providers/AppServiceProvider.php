@@ -43,7 +43,7 @@ class AppServiceProvider extends ServiceProvider
                 ->letters()
                 ->numbers()
                 ->symbols()
-                ->uncompromised()
+                ->when(! config('lab.offline'), fn (Password $rule) => $rule->uncompromised())
             : null,
         );
     }

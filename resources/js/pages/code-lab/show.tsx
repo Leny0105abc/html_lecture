@@ -6,6 +6,7 @@ import LessonTeacherReview, { type TeacherReview } from '@/components/lesson-tea
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { localLessonImages } from '@/lib/lesson-assets';
 
 type LessonGuide = { steps: string[]; focus: { code: string; meaning: string }[]; html_hint: string; css_hint: string; tip: string };
 type QuizQuestion = { question: string; choices: string[] };
@@ -58,8 +59,8 @@ export default function CodeLab({ lesson, workspace, previousLesson, nextLesson,
     const isFinalProject = lesson.number === 15;
     const files = isFinalProject ? ['index.html', 'about.html', 'gallery.html', 'contact.html', 'styles.css'] : isHtmlOnly ? ['index.html'] : ['index.html', 'styles.css'];
     const withStyles = (markup: string, styles: string) => /<\/head\s*>/i.test(markup)
-        ? markup.replace(/<\/head\s*>/i, `<style>${styles}</style></head>`)
-        : `<!doctype html><html><head><style>${styles}</style></head><body>${markup}</body></html>`;
+        ? localLessonImages(markup).replace(/<\/head\s*>/i, `<style>${styles}</style></head>`)
+        : `<!doctype html><html><head><style>${styles}</style></head><body>${localLessonImages(markup)}</body></html>`;
     const srcDoc = useMemo(() => withStyles(previewFile === 'index.html' ? previewHtml : previewExtraFiles[previewFile] ?? '', isHtmlOnly ? '' : previewCss), [previewFile, previewHtml, previewExtraFiles, previewCss, isHtmlOnly]);
     const expectedSrcDoc = useMemo(() => withStyles(lesson.activity_html ?? lesson.example_html ?? '', isHtmlOnly ? '' : lesson.activity_css ?? lesson.example_css ?? ''), [lesson.activity_html, lesson.activity_css, lesson.example_html, lesson.example_css, isHtmlOnly]);
 
